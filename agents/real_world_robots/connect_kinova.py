@@ -157,7 +157,7 @@ class KinovaGen3Controller:
             print(f"Error getting current pose: {e}")
             return None
 
-    def send_cartesian_delta(self, dpos, drot, duration=0.5):
+    def send_cartesian_delta(self, dpos, drot, gripper, duration=0.5):
         """
         Send a cartesian delta movement command
         
@@ -165,6 +165,7 @@ class KinovaGen3Controller:
             dpos (tuple): Delta position (dx, dy, dz) in meters
             drot (tuple): Delta rotation (dtheta_x, dtheta_y, dtheta_z) in degrees
             duration (float): Duration of movement in seconds
+            gripper (float): Gripper opening value (0.0 closed, 1.0 open)
         """
         if not self.is_connected:
             print("ERROR: Not connected to arm")
@@ -182,7 +183,10 @@ class KinovaGen3Controller:
             
             # Create twist command (without duration - it's not part of TwistCommand)
             twist_command = Base_pb2.TwistCommand()
-            twist_command.reference_frame = Base_pb2.CARTESIAN_REFERENCE_FRAME_TOOL
+            # Set reference frame to base frame (world coordinates)
+            twist_command.reference_frame = Base_pb2.CARTESIAN_REFERENCE_FRAME_BASE
+            
+            print(f"DEBUG: Using reference frame: BASE (world coordinates)")
             
             # Set linear velocities (converted from deltas)
             twist = twist_command.twist
@@ -195,8 +199,11 @@ class KinovaGen3Controller:
             twist.angular_y = (drot[1] * 3.14159 / 180.0) / duration
             twist.angular_z = (drot[2] * 3.14159 / 180.0) / duration
             
+            gripper = max(0.0, min(1.0, gripper))  # Clamp gripper value
+            
             print(f"DEBUG: Linear velocities: x={twist.linear_x:.4f}, y={twist.linear_y:.4f}, z={twist.linear_z:.4f} m/s")
             print(f"DEBUG: Angular velocities: x={twist.angular_x:.4f}, y={twist.angular_y:.4f}, z={twist.angular_z:.4f} rad/s")
+            print(f"DEBUG: Gripper command: {gripper:.2f} (0.0 closed, 1.0 open)")
             
             # Check if the arm is in a safe state before sending command
             try:
@@ -215,12 +222,31 @@ class KinovaGen3Controller:
             self.base_client.SendTwistCommand(twist_command)
             print(f"DEBUG: Command sent successfully, waiting {duration} seconds...")
             
+            # Create proper gripper command
+            print(f"DEBUG: Gripper command: {gripper:.2f} (0.0 closed, 1.0 open)")
+            gripper_command = Base_pb2.GripperCommand()
+            gripper_command.mode = Base_pb2.GripperMode.GRIPPER_POSITION
+            
+            # Create finger object 
+            finger = Base_pb2.Finger()
+            finger.finger_identifier = 0  # First finger
+            finger.value = gripper  # 0.0 to 1.0 range
+            
+            # Create gripper object and add finger
+            gripper_obj = Base_pb2.Gripper()
+            gripper_obj.finger.extend([finger])
+            
+            gripper_command.gripper.CopyFrom(gripper_obj)
+            gripper_command.duration = int(duration * 1000)  # Convert to milliseconds
+            
+            self.base_client.SendGripperCommand(gripper_command)
+    
             # Wait for the specified duration, then stop the motion
             time.sleep(duration)
             self.base_client.Stop()
             print("DEBUG: Motion stopped after duration")
-            
-            print(f"✓ Sent delta movement: pos={dpos}, rot={drot}, duration={duration}s")
+
+            print(f"✓ Sent delta movement: pos={dpos}, rot={drot}, gripper={gripper}, duration={duration}s")
             return True
             
         except Exception as e:
@@ -313,7 +339,7 @@ def main():
         
         # Example small movement (uncomment to test)
         print("\nSending small test movement...")
-        kinova.send_cartesian_delta((0.00, -0.05, 0.0), (0.0, 0.0, 0.0), duration=2.0)
+        kinova.send_cartesian_delta((0.00, 0.00, 0.05), (0.0, 0.0, 0.0), gripper=0.0, duration=2.0)
         
         print("\nConnection test completed successfully!")
         
