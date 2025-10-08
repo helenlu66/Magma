@@ -1,3 +1,4 @@
+import imageio
 import torch
 import pyrealsense2 as rs
 import numpy as np
@@ -12,23 +13,18 @@ from transformers import AutoModelForCausalLM, AutoProcessor
 # Get the directory where this script is located
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-def save_video(frames, filename="output.mp4", fps=30):
-    """
-    Save a list of frames (numpy arrays) as a video file
-    """
-    if len(frames) == 0:
-        print("No frames to save.")
-        return
-
-    height, width, _ = frames[0].shape
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    video_writer = cv2.VideoWriter(filename, fourcc, fps, (width, height))
-
-    for frame in frames:
-        video_writer.write(frame)
-
-    video_writer.release()
-    print(f"Video saved to {filename}")
+def save_camera_video(frames, path, video_name="camera_feed"):
+    """Saves a video replay of camera frames."""
+    if path != ".":
+        os.makedirs(path, exist_ok=True)
+    processed_video_name = video_name.lower().replace(" ", "_").replace("\n", "_").replace(".", "_")[:50]
+    video_path = f"{path}/{processed_video_name}.mp4"
+    video_writer = imageio.get_writer(video_path, fps=30)
+    for img in frames:
+        video_writer.append_data(img)
+    video_writer.close()
+    print(f"Saved camera video at path {video_path}")
+    return video_path
 
 def capture_single_frame(discard_initial_frames=50):
     """

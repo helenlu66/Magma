@@ -7,7 +7,7 @@ from connect_kinova import KinovaGen3Controller
 import numpy as np
 import torch
 import uvicorn
-from magma_perception import capture_single_frame, save_video
+from magma_perception import *
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
@@ -230,4 +230,4 @@ if __name__ == "__main__":
         robot.disconnect()
         curr_dir = os.path.dirname(os.path.abspath(__file__))
         video_path = os.path.join(curr_dir, "robot_camera_video.mp4")
-        save_video(frames, filename=video_path)
+        save_camera_video(frames, path = curr_dir, video_name="robot_camera_video")
